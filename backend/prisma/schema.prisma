@@ -1,0 +1,1396 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+datasource db {
+  provider   = "postgresql"
+  extensions = [vector]
+  schemas    = ["public", "practice_tests", "smart_revision", "ai_chat", "study_progress", "study_schedule", "tracker"]
+}
+
+// ──────────────────────────────────────
+// 1️⃣  Authentication & User System
+// ──────────────────────────────────────
+
+model User {
+  id            String    @id @default(uuid()) @db.Uuid
+  name          String?
+  email         String    @unique
+  password_hash String?
+  goal          String?   // UPSC, JEE, NEET, SSC
+  created_at    DateTime  @default(now())
+  updated_at    DateTime? @updatedAt
+
+  // Relations
+  auth_providers      AuthProvider[]
+  sessions            Session[]
+  password_resets     PasswordReset[]
+  student_profile     StudentProfile?
+  study_availability  StudyAvailability[]
+  timetables          Timetable[]
+  study_sessions      StudySession[]
+  tests               Test[]
+  test_attempts       TestAttempt[]
+  subject_performance SubjectPerformance[]
+  topic_performance   TopicPerformance[]
+  weak_topics         WeakTopic[]
+  ai_recommendations  AiRecommendation[]
+  study_streak        StudyStreak?
+  user_achievements   UserAchievement[]
+  onboarding          Onboarding?
+
+  // Practice Test Relations (old schema)
+  practice_tests    PracticeTest[]
+  practice_attempts PracticeStudentAttempt[]
+
+  // Custom Test Generator Relations (new schema)
+  custom_tests    CustomTest[]
+  custom_attempts CustomTestAttempt[]
+
+  // Smart Revision Relations (new schema)
+  sr_study_logs         SrStudyLog[]
+  sr_revision_schedules SrRevisionSchedule[]
+  sr_revision_tasks     SrRevisionTask[]
+  sr_revision_history   SrRevisionHistory[]
+  sr_ai_topic_metrics   SrAiTopicMetric[]
+
+  // AI Chat Bot Relations
+  ai_chat_conversations AiChatConversation[]
+  ai_chat_security_logs AiChatSecurityLog[]
+
+  // Study Progress Relations
+  sp_chapter_progress SpChapterProgress[]
+  sp_subject_progress SpSubjectProgress[]
+  sp_daily_study_logs SpDailyStudyLog[]
+  sp_weak_topics      SpWeakTopic[]
+
+  // Study Schedule Relations
+  ss_daily_tasks     SsDailyTask[]
+  ss_daily_summaries SsDailySummary[]
+
+  // NCERT Tracker Relations
+  tracker_progress TrackerUserTracker[]
+  tracker_custom   TrackerCustomTopic[]
+  tracker_logs     TrackerLog[]
+
+  @@map("users")
+  @@schema("public")
+}
+
+model Resource {
+  id            String   @id @default(uuid()) @db.Uuid
+  title         String
+  subject       String
+  class_level   String?  @map("class")
+  type          String   // 'NCERT' | 'Standard Book'
+  goal          String   // 'UPSC' | 'JEE' | 'NEET' | 'SSC'
+  chapter_name  String?
+  resource_link String
+  created_at    DateTime @default(now())
+
+  @@map("resources")
+  @@schema("public")
+}
+
+model AuthProvider {
+  id               String   @id @default(uuid()) @db.Uuid
+  user_id          String   @db.Uuid
+  provider         String // google, email
+  provider_user_id String
+  created_at       DateTime @default(now())
+
+  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@map("auth_providers")
+  @@schema("public")
+}
+
+model Session {
+  id         String   @id @default(uuid()) @db.Uuid
+  user_id    String   @db.Uuid
+  token      String
+  expires_at DateTime
+
+  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@map("sessions")
+  @@schema("public")
+}
+
+model PasswordReset {
+  id          String   @id @default(uuid()) @db.Uuid
+  user_id     String   @db.Uuid
+  reset_token String
+  expires_at  DateTime
+
+  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@map("password_resets")
+  @@schema("public")
+}
+
+model Onboarding {
+  id            String    @id @default(uuid()) @db.Uuid
+  user_id       String    @unique @db.Uuid
+  target_exam   String?
+  student_type  String?
+  class_level   String?
+  hours_per_day Int?
+  subjects      Json?     @default("[]")
+  exam_date     DateTime? @db.Date
+  created_at    DateTime  @default(now())
+  updated_at    DateTime? @updatedAt
+
+  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@map("onboarding")
+  @@schema("public")
+}
+
+// ──────────────────────────────────────
+// 2️⃣  Student Profile & Exam Config
+// ──────────────────────────────────────
+
+model Exam {
+  id          String  @id @default(uuid()) @db.Uuid
+  name        String
+  description String?
+
+  // Relations
+  subjects         Subject[]
+  student_profiles StudentProfile[]
+
+  @@map("exams")
+  @@schema("public")
+}
+
+model StudentProfile {
+  id               String    @id @default(uuid()) @db.Uuid
+  user_id          String    @unique @db.Uuid
+  exam_id          String    @db.Uuid
+  student_type     String?
+  class_level      String?
+  target_exam_date DateTime? @db.Date
+  created_at       DateTime  @default(now())
+
+  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  exam Exam @relation(fields: [exam_id], references: [id])
+
+  @@map("student_profiles")
+  @@schema("public")
+}
+
+model StudyAvailability {
+  id          String   @id @default(uuid()) @db.Uuid
+  user_id     String   @db.Uuid
+  day_of_week Int // 0=Sunday, 6=Saturday
+  start_time  DateTime @db.Time()
+  end_time    DateTime @db.Time()
+
+  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@map("study_availability")
+  @@schema("public")
+}
+
+// ──────────────────────────────────────
+// 3️⃣  Syllabus Structure
+// ──────────────────────────────────────
+
+model Subject {
+  id      String @id @default(uuid()) @db.Uuid
+  exam_id String @db.Uuid
+  name    String
+
+  exam                 Exam                 @relation(fields: [exam_id], references: [id], onDelete: Cascade)
+  topics               Topic[]
+  subject_performances SubjectPerformance[]
+  practice_tests       PracticeTest[]
+
+  @@map("subjects")
+  @@schema("public")
+}
+
+model Topic {
+  id         String @id @default(uuid()) @db.Uuid
+  subject_id String @db.Uuid
+  name       String
+
+  subject            Subject            @relation(fields: [subject_id], references: [id], onDelete: Cascade)
+  chapters           Chapter[]
+  topic_performances TopicPerformance[]
+  weak_topics        WeakTopic[]
+
+  @@map("topics")
+  @@schema("public")
+}
+
+model Chapter {
+  id                      String  @id @default(uuid()) @db.Uuid
+  topic_id                String  @db.Uuid
+  name                    String
+  estimated_study_minutes Int?
+  difficulty_level        String? // easy, medium, hard
+  importance_weight       Int? // 1-10
+
+  topic           Topic           @relation(fields: [topic_id], references: [id], onDelete: Cascade)
+  subtopics       Subtopic[]
+  timetable_slots TimetableSlot[]
+  study_sessions  StudySession[]
+  questions       Question[]
+
+  @@map("chapters")
+  @@schema("public")
+}
+
+model Subtopic {
+  id         String @id @default(uuid()) @db.Uuid
+  chapter_id String @db.Uuid
+  name       String
+
+  chapter Chapter @relation(fields: [chapter_id], references: [id], onDelete: Cascade)
+
+  @@map("subtopics")
+  @@schema("public")
+}
+
+// ──────────────────────────────────────
+// 4️⃣  AI Timetable System
+// ──────────────────────────────────────
+
+model Timetable {
+  id         String   @id @default(uuid()) @db.Uuid
+  user_id    String   @db.Uuid
+  created_at DateTime @default(now())
+
+  user  User            @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  slots TimetableSlot[]
+
+  @@map("timetables")
+  @@schema("public")
+}
+
+model TimetableSlot {
+  id             String   @id @default(uuid()) @db.Uuid
+  timetable_id   String   @db.Uuid
+  chapter_id     String   @db.Uuid
+  scheduled_date DateTime @db.Date
+  start_time     DateTime @db.Time()
+  end_time       DateTime @db.Time()
+  task_type      String // study, revision, mock_test
+
+  timetable Timetable @relation(fields: [timetable_id], references: [id], onDelete: Cascade)
+  chapter   Chapter   @relation(fields: [chapter_id], references: [id])
+
+  @@map("timetable_slots")
+  @@schema("public")
+}
+
+// ──────────────────────────────────────
+// 5️⃣  Study Tracking
+// ──────────────────────────────────────
+
+model StudySession {
+  id               String    @id @default(uuid()) @db.Uuid
+  user_id          String    @db.Uuid
+  chapter_id       String    @db.Uuid
+  start_time       DateTime
+  end_time         DateTime?
+  duration_minutes Int?
+
+  user    User    @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  chapter Chapter @relation(fields: [chapter_id], references: [id])
+
+  @@map("study_sessions")
+  @@schema("public")
+}
+
+// ──────────────────────────────────────
+// 6️⃣  Question Bank (AI + PYQ)
+// ──────────────────────────────────────
+
+model Question {
+  id            String   @id @default(uuid()) @db.Uuid
+  chapter_id    String   @db.Uuid
+  question_text String
+  difficulty    String // easy, medium, hard
+  source        String // ai, pyq
+  created_at    DateTime @default(now())
+
+  chapter        Chapter               @relation(fields: [chapter_id], references: [id], onDelete: Cascade)
+  options        QuestionOption[]
+  explanations   QuestionExplanation[]
+  embedding      QuestionEmbedding?
+  test_questions TestQuestion[]
+  user_answers   UserAnswer[]
+
+  @@map("questions")
+  @@schema("public")
+}
+
+model QuestionOption {
+  id          String  @id @default(uuid()) @db.Uuid
+  question_id String  @db.Uuid
+  option_text String
+  is_correct  Boolean @default(false)
+
+  question Question @relation(fields: [question_id], references: [id], onDelete: Cascade)
+
+  @@map("question_options")
+  @@schema("public")
+}
+
+model QuestionExplanation {
+  id          String @id @default(uuid()) @db.Uuid
+  question_id String @db.Uuid
+  explanation String
+
+  question Question @relation(fields: [question_id], references: [id], onDelete: Cascade)
+
+  @@map("question_explanations")
+  @@schema("public")
+}
+
+// ──────────────────────────────────────
+// 7️⃣  Embeddings (pgvector) — Public Schema
+// ──────────────────────────────────────
+
+model QuestionEmbedding {
+  question_id String                      @id @db.Uuid
+  embedding   Unsupported("vector(1536)")
+
+  question Question @relation(fields: [question_id], references: [id], onDelete: Cascade)
+
+  @@map("question_embeddings")
+  @@schema("public")
+}
+
+// ──────────────────────────────────────
+// 8️⃣  Test Engine (Legacy — Public Schema)
+// ──────────────────────────────────────
+
+model Test {
+  id         String   @id @default(uuid()) @db.Uuid
+  user_id    String   @db.Uuid
+  test_type  String // mock, chapter_test, full_syllabus
+  difficulty String? // easy, medium, hard
+  created_at DateTime @default(now())
+
+  user           User           @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  test_questions TestQuestion[]
+  test_attempts  TestAttempt[]
+
+  @@map("tests")
+  @@schema("public")
+}
+
+model TestQuestion {
+  id             String @id @default(uuid()) @db.Uuid
+  test_id        String @db.Uuid
+  question_id    String @db.Uuid
+  question_order Int
+
+  test     Test     @relation(fields: [test_id], references: [id], onDelete: Cascade)
+  question Question @relation(fields: [question_id], references: [id])
+
+  @@map("test_questions")
+  @@schema("public")
+}
+
+model TestAttempt {
+  id           String    @id @default(uuid()) @db.Uuid
+  user_id      String    @db.Uuid
+  test_id      String    @db.Uuid
+  started_at   DateTime  @default(now())
+  completed_at DateTime?
+  score        Int?
+  accuracy     Float?
+  time_taken   Int? // seconds
+
+  user         User         @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  test         Test         @relation(fields: [test_id], references: [id], onDelete: Cascade)
+  user_answers UserAnswer[]
+
+  @@map("test_attempts")
+  @@schema("public")
+}
+
+model UserAnswer {
+  id                 String   @id @default(uuid()) @db.Uuid
+  attempt_id         String   @db.Uuid
+  question_id        String   @db.Uuid
+  selected_option_id String?  @db.Uuid
+  is_correct         Boolean?
+  time_spent_seconds Int?
+
+  attempt  TestAttempt @relation(fields: [attempt_id], references: [id], onDelete: Cascade)
+  question Question    @relation(fields: [question_id], references: [id])
+
+  @@map("user_answers")
+  @@schema("public")
+}
+
+// ──────────────────────────────────────
+// 9️⃣  Performance Analytics
+// ──────────────────────────────────────
+
+model SubjectPerformance {
+  id                  String @id @default(uuid()) @db.Uuid
+  user_id             String @db.Uuid
+  subject_id          String @db.Uuid
+  accuracy            Float  @default(0)
+  questions_attempted Int    @default(0)
+
+  user    User    @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  subject Subject @relation(fields: [subject_id], references: [id])
+
+  @@unique([user_id, subject_id])
+  @@map("subject_performance")
+  @@schema("public")
+}
+
+model TopicPerformance {
+  id       String @id @default(uuid()) @db.Uuid
+  user_id  String @db.Uuid
+  topic_id String @db.Uuid
+  accuracy Float  @default(0)
+  attempts Int    @default(0)
+
+  user  User  @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  topic Topic @relation(fields: [topic_id], references: [id])
+
+  @@unique([user_id, topic_id])
+  @@map("topic_performance")
+  @@schema("public")
+}
+
+model WeakTopic {
+  id             String @id @default(uuid()) @db.Uuid
+  user_id        String @db.Uuid
+  topic_id       String @db.Uuid
+  weakness_score Float  @default(0)
+
+  user  User  @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  topic Topic @relation(fields: [topic_id], references: [id])
+
+  @@unique([user_id, topic_id])
+  @@map("weak_topics")
+  @@schema("public")
+}
+
+// ──────────────────────────────────────
+// 🔟  AI Recommendations
+// ──────────────────────────────────────
+
+model AiRecommendation {
+  id                  String   @id @default(uuid()) @db.Uuid
+  user_id             String   @db.Uuid
+  recommendation_text String
+  created_at          DateTime @default(now())
+
+  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@map("ai_recommendations")
+  @@schema("public")
+}
+
+// ──────────────────────────────────────
+// 1️⃣1️⃣  Gamification & Progress
+// ──────────────────────────────────────
+
+model StudyStreak {
+  user_id         String    @id @db.Uuid
+  current_streak  Int       @default(0)
+  longest_streak  Int       @default(0)
+  total_xp        Int       @default(0)
+  last_study_date DateTime? @db.Date
+
+  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@map("study_streaks")
+  @@schema("public")
+}
+
+model Achievement {
+  id          String  @id @default(uuid()) @db.Uuid
+  name        String
+  description String?
+
+  user_achievements UserAchievement[]
+
+  @@map("achievements")
+  @@schema("public")
+}
+
+model UserAchievement {
+  id             String   @id @default(uuid()) @db.Uuid
+  user_id        String   @db.Uuid
+  achievement_id String   @db.Uuid
+  unlocked_at    DateTime @default(now())
+
+  user        User        @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  achievement Achievement @relation(fields: [achievement_id], references: [id])
+
+  @@unique([user_id, achievement_id])
+  @@map("user_achievements")
+  @@schema("public")
+}
+
+// ══════════════════════════════════════════════════════
+// 1️⃣2️⃣  PRACTICE TESTS — Dedicated Schema
+//     All tables live in practice_tests.* schema
+// ══════════════════════════════════════════════════════
+
+model PracticeTest {
+  id                  String   @id @default(uuid()) @db.Uuid
+  user_id             String   @db.Uuid
+  subject_id          String?  @db.Uuid
+  topic_requested     String
+  chapter_requested   String?
+  test_type           String   @default("custom") // custom, full, chapter, pyq, mock
+  subjects            String[] @default([])
+  chapters            String[] @default([])
+  is_pyq              Boolean  @default(false)
+  pyq_years           String?
+  negative_marking    Boolean  @default(false)
+  difficulty_level    String   @default("medium")
+  number_of_questions Int      @default(10)
+  duration_minutes    Int      @default(30)
+  status              String   @default("created")
+  ai_generated        Boolean  @default(true)
+  created_at          DateTime @default(now()) @db.Timestamptz
+  updated_at          DateTime @default(now()) @updatedAt @db.Timestamptz
+
+  user      User                     @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  subject   Subject?                 @relation(fields: [subject_id], references: [id], onDelete: SetNull)
+  questions PracticeQuestion[]
+  attempts  PracticeStudentAttempt[]
+
+  @@index([user_id])
+  @@index([subject_id])
+  @@index([created_at(sort: Desc)])
+  @@map("tests")
+  @@schema("practice_tests")
+}
+
+model PracticeQuestion {
+  id                     String   @id @default(uuid()) @db.Uuid
+  test_id                String   @db.Uuid
+  question_text          String
+  subject                String?
+  chapter                String?
+  difficulty             String   @default("medium")
+  concept_tested         String?
+  estimated_time_seconds Int?
+  question_order         Int      @default(1)
+  created_at             DateTime @default(now()) @db.Timestamptz
+
+  test            PracticeTest                  @relation(fields: [test_id], references: [id], onDelete: Cascade)
+  options         PracticeQuestionOption[]
+  explanations    PracticeQuestionExplanation[]
+  student_answers PracticeStudentAnswer[]
+  embedding       PracticeQuestionEmbedding?
+
+  @@index([test_id])
+  @@map("questions")
+  @@schema("practice_tests")
+}
+
+model PracticeQuestionOption {
+  id           String  @id @default(uuid()) @db.Uuid
+  question_id  String  @db.Uuid
+  option_label String
+  option_text  String
+  is_correct   Boolean @default(false)
+
+  question        PracticeQuestion        @relation(fields: [question_id], references: [id], onDelete: Cascade)
+  student_answers PracticeStudentAnswer[]
+
+  @@index([question_id])
+  @@map("question_options")
+  @@schema("practice_tests")
+}
+
+model PracticeQuestionExplanation {
+  id           String   @id @default(uuid()) @db.Uuid
+  question_id  String   @db.Uuid
+  explanation  String
+  ai_generated Boolean  @default(true)
+  created_at   DateTime @default(now()) @db.Timestamptz
+
+  question PracticeQuestion @relation(fields: [question_id], references: [id], onDelete: Cascade)
+
+  @@index([question_id])
+  @@map("question_explanations")
+  @@schema("practice_tests")
+}
+
+model PracticeStudentAttempt {
+  id                  String    @id @default(uuid()) @db.Uuid
+  test_id             String    @db.Uuid
+  user_id             String    @db.Uuid
+  started_at          DateTime  @default(now()) @db.Timestamptz
+  completed_at        DateTime? @db.Timestamptz
+  total_questions     Int       @default(0)
+  correct_answers     Int       @default(0)
+  accuracy_percentage Float     @default(0)
+
+  test     PracticeTest            @relation(fields: [test_id], references: [id], onDelete: Cascade)
+  user     User                    @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  answers  PracticeStudentAnswer[]
+  result   PracticeTestResult?
+  analysis PracticeTestAnalysis?
+
+  @@index([user_id])
+  @@index([test_id])
+  @@index([started_at(sort: Desc)])
+  @@map("student_attempts")
+  @@schema("practice_tests")
+}
+
+model PracticeStudentAnswer {
+  id                 String   @id @default(uuid()) @db.Uuid
+  attempt_id         String   @db.Uuid
+  question_id        String   @db.Uuid
+  selected_option_id String?  @db.Uuid
+  selected_option    String?
+  is_correct         Boolean?
+  time_taken_seconds Int?
+
+  attempt      PracticeStudentAttempt  @relation(fields: [attempt_id], references: [id], onDelete: Cascade)
+  question     PracticeQuestion        @relation(fields: [question_id], references: [id], onDelete: Cascade)
+  selected_opt PracticeQuestionOption? @relation(fields: [selected_option_id], references: [id], onDelete: SetNull)
+
+  @@index([attempt_id])
+  @@index([question_id])
+  @@map("student_answers")
+  @@schema("practice_tests")
+}
+
+model PracticeTestResult {
+  id                 String   @id @default(uuid()) @db.Uuid
+  attempt_id         String   @db.Uuid
+  score              Int      @default(0)
+  accuracy           Float    @default(0)
+  total_time_seconds Int?
+  created_at         DateTime @default(now()) @db.Timestamptz
+
+  attempt PracticeStudentAttempt @relation(fields: [attempt_id], references: [id], onDelete: Cascade)
+
+  @@unique([attempt_id])
+  @@index([attempt_id])
+  @@map("test_results")
+  @@schema("practice_tests")
+}
+
+model PracticeTestAnalysis {
+  id                      String   @id @default(uuid()) @db.Uuid
+  attempt_id              String   @unique @db.Uuid
+  weak_topics             Json     @default("[]") @db.JsonB
+  strong_topics           Json     @default("[]") @db.JsonB
+  improvement_suggestions Json     @default("[]") @db.JsonB
+  ai_feedback             String?
+  created_at              DateTime @default(now()) @db.Timestamptz
+
+  attempt PracticeStudentAttempt @relation(fields: [attempt_id], references: [id], onDelete: Cascade)
+
+  @@index([attempt_id])
+  @@map("test_analysis")
+  @@schema("practice_tests")
+}
+
+model CustomTestStudyPlan {
+  id                    String             @id @default(uuid()) @db.Uuid
+  attempt_id            String             @unique @db.Uuid
+  attempt               CustomTestAttempt  @relation(fields: [attempt_id], references: [id], onDelete: Cascade)
+  
+  overall_level         String             // beginner/intermediate/advanced
+  performance_summary   String
+  weak_topics_analysis  Json               @db.JsonB
+  strong_areas          Json               @db.JsonB
+  study_strategy        Json               @db.JsonB
+  revision_plan         Json               @db.JsonB
+  practice_strategy     Json               @db.JsonB
+  time_management       Json               @db.JsonB
+  mistake_analysis      Json               @db.JsonB
+  weekly_plan           Json               @db.JsonB
+  ai_advice             String
+  
+  suggested_hours       Float
+  next_test_topic       String?
+  next_test_date        DateTime?
+  improvement_timeline  String?
+  
+  created_at            DateTime           @default(now()) @db.Timestamptz
+  updated_at            DateTime           @updatedAt @db.Timestamptz
+
+  @@map("custom_test_study_plans")
+  @@schema("practice_tests")
+}
+
+
+model PracticeQuestionEmbedding {
+  id          String                      @id @default(uuid()) @db.Uuid
+  question_id String                      @unique @db.Uuid
+  embedding   Unsupported("vector(1536)")
+  model_used  String                      @default("text-embedding-3-small")
+  created_at  DateTime                    @default(now()) @db.Timestamptz
+
+  question PracticeQuestion @relation(fields: [question_id], references: [id], onDelete: Cascade)
+
+  @@map("question_embeddings")
+  @@schema("practice_tests")
+}
+
+// ══════════════════════════════════════════════════════
+// 1️⃣3️⃣  SMART REVISION SYSTEM — Dedicated Schema
+//     All tables live in smart_revision.* schema
+// ══════════════════════════════════════════════════════
+
+model SrStudyLog {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id    String   @db.Uuid
+  study_date DateTime @db.Date
+  created_at DateTime @default(now()) @db.Timestamptz
+
+  user   User              @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  topics SrStudyLogTopic[]
+
+  @@index([user_id, study_date])
+  @@index([study_date])
+  @@map("study_logs")
+  @@schema("smart_revision")
+}
+
+model SrStudyLogTopic {
+  id                String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  study_log_id      String   @db.Uuid
+  subject           String
+  topic             String
+  chapter           String?
+  difficulty_level  String?
+  importance_weight Int?
+  created_at        DateTime @default(now()) @db.Timestamptz
+
+  study_log SrStudyLog @relation(fields: [study_log_id], references: [id], onDelete: Cascade)
+
+  @@index([study_log_id])
+  @@map("study_log_topics")
+  @@schema("smart_revision")
+}
+
+model SrRevisionSchedule {
+  id                 String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id            String   @db.Uuid
+  subject            String
+  topic              String
+  chapter            String?
+  next_revision_date DateTime @db.Date
+  priority_level     String? // high, medium, low
+  interval_days      Int
+  revision_stage     Int
+  created_at         DateTime @default(now()) @db.Timestamptz
+
+  user  User             @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  tasks SrRevisionTask[]
+
+  @@index([user_id, next_revision_date])
+  @@index([next_revision_date])
+  @@map("revision_schedules")
+  @@schema("smart_revision")
+}
+
+model SrRevisionTask {
+  id                   String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id              String   @db.Uuid
+  revision_schedule_id String   @db.Uuid
+  scheduled_date       DateTime @db.Date
+  status               String   @default("pending") // pending, completed, skipped
+  created_at           DateTime @default(now()) @db.Timestamptz
+
+  user     User               @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  schedule SrRevisionSchedule @relation(fields: [revision_schedule_id], references: [id], onDelete: Cascade)
+
+  @@index([user_id, scheduled_date, status])
+  @@index([revision_schedule_id])
+  @@map("revision_tasks")
+  @@schema("smart_revision")
+}
+
+model SrRevisionHistory {
+  id                 String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id            String   @db.Uuid
+  subject            String
+  topic              String
+  chapter            String?
+  revision_date      DateTime @db.Date
+  completed          Boolean  @default(false)
+  performance_score  Float?
+  time_spent_minutes Int?
+  created_at         DateTime @default(now()) @db.Timestamptz
+
+  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@index([user_id, revision_date])
+  @@map("revision_history")
+  @@schema("smart_revision")
+}
+
+model SrTopicMaster {
+  id                String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  subject           String
+  topic             String
+  chapter           String?
+  exam              String?
+  base_difficulty   String?
+  importance_weight Int?
+  created_at        DateTime @default(now()) @db.Timestamptz
+
+  @@index([subject, topic])
+  @@map("topic_master")
+  @@schema("smart_revision")
+}
+
+model SrAiTopicMetric {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id        String   @db.Uuid
+  topic          String
+  chapter        String?
+  strength_level Float?
+  weakness_level Float?
+  last_updated   DateTime @default(now()) @db.Timestamptz
+
+  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@index([user_id, topic])
+  @@map("ai_topic_metrics")
+  @@schema("smart_revision")
+}
+
+// ══════════════════════════════════════════════════════
+// 1️⃣4️⃣  AI CHAT BOT SYSTEM — Dedicated Schema
+//     All tables live in ai_chat.* schema
+// ══════════════════════════════════════════════════════
+
+model AiChatConversation {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id        String?  @db.Uuid
+  session_id     String?
+  started_at     DateTime @default(now()) @db.Timestamptz
+  last_active_at DateTime @default(now()) @db.Timestamptz
+  is_active      Boolean  @default(true)
+
+  user                  User?                       @relation(fields: [user_id], references: [id], onDelete: SetNull)
+  messages              AiChatMessage[]
+  prompt_logs           AiChatPromptLog[]
+  conversation_metadata AiChatConversationMetadata?
+
+  @@index([user_id])
+  @@index([session_id])
+  @@index([last_active_at])
+  @@map("conversations")
+  @@schema("ai_chat")
+}
+
+model AiChatMessage {
+  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  conversation_id String   @db.Uuid
+  sender_type     String // 'user' or 'ai'
+  message_text    String
+  message_type    String // 'text' or 'system'
+  created_at      DateTime @default(now()) @db.Timestamptz
+
+  conversation AiChatConversation @relation(fields: [conversation_id], references: [id], onDelete: Cascade)
+  ai_response  AiChatAiResponse?
+  feedback     AiChatFeedback?
+
+  @@index([conversation_id])
+  @@index([created_at])
+  @@map("messages")
+  @@schema("ai_chat")
+}
+
+model AiChatAiResponse {
+  id               String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  message_id       String   @unique @db.Uuid
+  response_text    String
+  tokens_used      Int?
+  model_used       String?
+  response_time_ms Int?
+  created_at       DateTime @default(now()) @db.Timestamptz
+
+  message AiChatMessage @relation(fields: [message_id], references: [id], onDelete: Cascade)
+
+  @@index([message_id])
+  @@map("ai_responses")
+  @@schema("ai_chat")
+}
+
+model AiChatPromptLog {
+  id                 String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  conversation_id    String   @db.Uuid
+  user_input         String
+  system_prompt_hash String?
+  created_at         DateTime @default(now()) @db.Timestamptz
+
+  conversation AiChatConversation @relation(fields: [conversation_id], references: [id], onDelete: Cascade)
+
+  @@index([conversation_id])
+  @@map("prompt_logs")
+  @@schema("ai_chat")
+}
+
+model AiChatSecurityLog {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id      String?  @db.Uuid
+  session_id   String?
+  input_text   String
+  threat_type  String // e.g., 'prompt_injection', 'data_extraction'
+  action_taken String // 'blocked' or 'allowed'
+  created_at   DateTime @default(now()) @db.Timestamptz
+
+  user User? @relation(fields: [user_id], references: [id], onDelete: SetNull)
+
+  @@index([user_id])
+  @@index([session_id])
+  @@index([created_at])
+  @@map("security_logs")
+  @@schema("ai_chat")
+}
+
+model AiChatRateLimit {
+  id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id       String?  @db.Uuid
+  session_id    String?
+  request_count Int      @default(1)
+  window_start  DateTime @db.Timestamptz
+  created_at    DateTime @default(now()) @db.Timestamptz
+
+  @@index([user_id])
+  @@index([session_id])
+  @@index([window_start])
+  @@map("rate_limits")
+  @@schema("ai_chat")
+}
+
+model AiChatFeedback {
+  id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  message_id    String   @unique @db.Uuid
+  user_id       String?  @db.Uuid
+  rating        Int? // 1 to 5
+  feedback_text String?
+  created_at    DateTime @default(now()) @db.Timestamptz
+
+  message AiChatMessage @relation(fields: [message_id], references: [id], onDelete: Cascade)
+
+  @@index([message_id])
+  @@index([user_id])
+  @@map("feedback")
+  @@schema("ai_chat")
+}
+
+model AiChatConversationMetadata {
+  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  conversation_id String   @unique @db.Uuid
+  user_agent      String?
+  ip_address      String?
+  location        String?
+  device_type     String?
+  created_at      DateTime @default(now()) @db.Timestamptz
+
+  conversation AiChatConversation @relation(fields: [conversation_id], references: [id], onDelete: Cascade)
+
+  @@index([conversation_id])
+  @@map("conversation_metadata")
+  @@schema("ai_chat")
+}
+
+// ══════════════════════════════════════════════════════
+// 1️⃣5️⃣  STUDY PROGRESS TRACKING — Dedicated Schema
+//     All tables live in study_progress.* schema
+// ══════════════════════════════════════════════════════
+
+model SpChapterProgress {
+  id                 String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id            String    @db.Uuid
+  subject            String
+  class              Int
+  chapter_name       String
+  is_completed       Boolean   @default(false)
+  completion_date    DateTime? @db.Timestamptz
+  time_spent_minutes Int       @default(0)
+  created_at         DateTime  @default(now()) @db.Timestamptz
+
+  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@unique([user_id, subject, chapter_name])
+  @@index([user_id, subject])
+  @@index([user_id, is_completed])
+  @@map("chapter_progress")
+  @@schema("study_progress")
+}
+
+model SpSubjectProgress {
+  id                  String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id             String   @db.Uuid
+  subject             String
+  total_chapters      Int      @default(0)
+  completed_chapters  Int      @default(0)
+  progress_percentage Float    @default(0)
+  updated_at          DateTime @default(now()) @updatedAt @db.Timestamptz
+
+  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@unique([user_id, subject])
+  @@index([user_id])
+  @@map("subject_progress")
+  @@schema("study_progress")
+}
+
+model SpDailyStudyLog {
+  id                 String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id            String   @db.Uuid
+  date               DateTime @db.Date
+  total_time_minutes Int      @default(0)
+  topics_covered     String[] @default([])
+  created_at         DateTime @default(now()) @db.Timestamptz
+
+  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@unique([user_id, date])
+  @@index([user_id, date])
+  @@map("daily_study_log")
+  @@schema("study_progress")
+}
+
+model SpWeakTopic {
+  id                  String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id             String   @db.Uuid
+  subject             String
+  topic_name          String
+  accuracy_percentage Float    @default(0)
+  last_tested         DateTime @default(now()) @db.Timestamptz
+
+  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@unique([user_id, subject, topic_name])
+  @@index([user_id])
+  @@index([user_id, accuracy_percentage])
+  @@map("weak_topics_progress")
+  @@schema("study_progress")
+}
+
+// ══════════════════════════════════════════════════════
+// 1️⃣6️⃣  STUDY SCHEDULE SYSTEM — Dedicated Schema
+//     All tables live in study_schedule.* schema
+// ══════════════════════════════════════════════════════
+
+model SsDailyTask {
+  id                String   @id @default(uuid()) @db.Uuid
+  user_id           String   @db.Uuid
+  date              DateTime @db.Date
+  subject           String
+  topic             String
+  estimated_minutes Int
+  priority          String   @default("medium") // low, medium, high
+  is_completed      Boolean  @default(false)
+  created_at        DateTime @default(now())
+
+  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@unique([user_id, date, subject, topic], name: "unique_daily_task")
+  @@map("ss_daily_tasks")
+  @@schema("study_schedule")
+}
+
+model SsDailySummary {
+  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id         String   @db.Uuid
+  date            DateTime @db.Date
+  total_hours     Float    @default(0)
+  subjects        String[] @default([])
+  topics          String[] @default([])
+  completed_tasks Int      @default(0)
+  created_at      DateTime @default(now()) @db.Timestamptz
+
+  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@unique([user_id, date])
+  @@index([user_id, date])
+  @@map("daily_summary")
+  @@schema("study_schedule")
+}
+
+
+// ══════════════════════════════════════════════════════
+// 1️⃣7️⃣  CUSTOM TESTS — Dedicated Chat-Generator Schema
+// ══════════════════════════════════════════════════════
+
+model CustomTest {
+  id               String   @id @default(uuid()) @db.Uuid
+  user_id          String   @db.Uuid
+  subject          String
+  class            String?
+  chapter          String?
+  topic            String?
+  difficulty       String   @default("medium")
+  num_questions    Int      @default(20)
+  duration_minutes Int      @default(30)
+  created_at       DateTime @default(now()) @db.Timestamptz
+
+  user      User                 @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  questions CustomTestQuestion[]
+  attempts  CustomTestAttempt[]
+  ai_logs   CustomTestAILog[]
+
+  @@index([user_id])
+  @@index([created_at(sort: Desc)])
+  @@map("custom_tests")
+  @@schema("practice_tests")
+}
+
+model CustomTestQuestion {
+  id             String   @id @default(uuid()) @db.Uuid
+  test_id        String   @db.Uuid
+  question_text  String
+  option_a       String
+  option_b       String
+  option_c       String
+  option_d       String
+  correct_answer String   
+  explanation    String?
+  difficulty     String   @default("medium")
+  created_at     DateTime @default(now()) @db.Timestamptz
+
+  test    CustomTest         @relation(fields: [test_id], references: [id], onDelete: Cascade)
+  answers CustomTestAnswer[]
+
+  @@index([test_id])
+  @@map("custom_test_questions")
+  @@schema("practice_tests")
+}
+
+model CustomTestAttempt {
+  id           String   @id @default(uuid()) @db.Uuid
+  test_id      String   @db.Uuid
+  user_id      String   @db.Uuid
+  score        Int      @default(0)
+  accuracy     Float    @default(0)
+  time_taken   Int?     
+  submitted_at DateTime @default(now()) @db.Timestamptz
+
+  test    CustomTest         @relation(fields: [test_id], references: [id], onDelete: Cascade)
+  user    User               @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  answers CustomTestAnswer[]
+  analysis CustomTestAnalysis?
+  study_plan CustomTestStudyPlan?
+
+  @@index([test_id])
+  @@index([user_id])
+  @@map("custom_test_attempts")
+  @@schema("practice_tests")
+}
+
+model CustomTestAnswer {
+  id              String  @id @default(uuid()) @db.Uuid
+  attempt_id      String  @db.Uuid
+  question_id     String  @db.Uuid
+  selected_option String? 
+  is_correct      Boolean @default(false)
+
+  attempt  CustomTestAttempt  @relation(fields: [attempt_id], references: [id], onDelete: Cascade)
+  question CustomTestQuestion @relation(fields: [question_id], references: [id], onDelete: Cascade)
+
+  @@index([attempt_id])
+  @@map("custom_test_answers")
+  @@schema("practice_tests")
+}
+
+model CustomTestAILog {
+  id          String   @id @default(uuid()) @db.Uuid
+  test_id     String   @db.Uuid
+  prompt_used String
+  ai_response String
+  created_at  DateTime @default(now()) @db.Timestamptz
+
+  test CustomTest @relation(fields: [test_id], references: [id], onDelete: Cascade)
+
+
+  @@index([test_id])
+  @@map("custom_test_ai_logs")
+  @@schema("practice_tests")
+}
+
+model CustomTestAnalysis {
+  id                      String   @id @default(uuid()) @db.Uuid
+  attempt_id              String   @db.Uuid @unique
+  weak_topics             String[] @default([])
+  strong_topics           String[] @default([])
+  improvement_suggestions String[] @default([])
+  ai_feedback             String
+  created_at              DateTime @default(now()) @db.Timestamptz
+
+  attempt CustomTestAttempt @relation(fields: [attempt_id], references: [id], onDelete: Cascade)
+
+  @@map("custom_test_analysis")
+  @@schema("practice_tests")
+}
+
+// ──────────────────────────────────────
+// TRACKER (NCERT PREPARATION SYSTEM)
+// ──────────────────────────────────────
+
+enum TrackerStatus {
+  pending
+  in_progress
+  completed
+
+  @@schema("tracker")
+}
+
+enum TrackerPriority {
+  low
+  medium
+  high
+
+  @@schema("tracker")
+}
+
+enum TrackerActionType {
+  status_change
+  revision_done
+  ncert_done
+
+  @@schema("tracker")
+}
+
+model TrackerSubject {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name       String   @unique @db.VarChar(255)
+  created_at DateTime @default(now()) @db.Timestamptz
+
+  chapters      TrackerChapter[]
+  user_trackers TrackerUserTracker[]
+  custom_topics TrackerCustomTopic[]
+
+  @@map("subjects")
+  @@schema("tracker")
+}
+
+model TrackerClass {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  class_number Int      @unique
+  created_at   DateTime @default(now()) @db.Timestamptz
+
+  chapters      TrackerChapter[]
+  user_trackers TrackerUserTracker[]
+  custom_topics TrackerCustomTopic[]
+
+  @@map("classes")
+  @@schema("tracker")
+}
+
+model TrackerChapter {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  subject_id     String   @db.Uuid
+  class_id       String   @db.Uuid
+  chapter_name   String
+  chapter_number Int?
+  created_at     DateTime @default(now()) @db.Timestamptz
+
+  subject TrackerSubject @relation(fields: [subject_id], references: [id], onDelete: Cascade)
+  class   TrackerClass   @relation(fields: [class_id], references: [id], onDelete: Cascade)
+
+  user_trackers TrackerUserTracker[]
+
+  @@unique([subject_id, class_id, chapter_name])
+  @@map("chapters")
+  @@schema("tracker")
+}
+
+model TrackerUserTracker {
+  id                String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id           String  @db.Uuid
+  subject_id        String  @db.Uuid
+  class_id          String? @db.Uuid
+  chapter_id        String? @db.Uuid
+  custom_topic_name String?
+
+  status     TrackerStatus @default(pending)
+  ncert_read Boolean       @default(false)
+
+  revision1_done Boolean   @default(false)
+  revision1_date DateTime? @db.Timestamptz
+  revision2_done Boolean   @default(false)
+  revision2_date DateTime? @db.Timestamptz
+  revision3_done Boolean   @default(false)
+  revision3_date DateTime? @db.Timestamptz
+  revision4_done Boolean   @default(false)
+  revision4_date DateTime? @db.Timestamptz
+
+  last_revised_at DateTime?       @db.Timestamptz
+  priority        TrackerPriority @default(medium)
+
+  created_at DateTime @default(now()) @db.Timestamptz
+  updated_at DateTime @default(now()) @updatedAt @db.Timestamptz
+
+  user    User            @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  subject TrackerSubject  @relation(fields: [subject_id], references: [id], onDelete: Cascade)
+  class   TrackerClass?   @relation(fields: [class_id], references: [id], onDelete: SetNull)
+  chapter TrackerChapter? @relation(fields: [chapter_id], references: [id], onDelete: Cascade)
+
+  logs TrackerLog[]
+
+  @@unique([user_id, chapter_id])
+  @@unique([user_id, subject_id, custom_topic_name])
+  @@index([user_id])
+  @@index([chapter_id])
+  @@index([subject_id])
+  @@index([class_id])
+  @@index([status])
+  @@index([last_revised_at])
+  @@map("user_tracker")
+  @@schema("tracker")
+}
+
+model TrackerCustomTopic {
+  id         String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id    String  @db.Uuid
+  subject_id String  @db.Uuid
+  class_id   String? @db.Uuid
+  topic_name String
+
+  created_at DateTime @default(now()) @db.Timestamptz
+
+  user    User          @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  subject TrackerSubject @relation(fields: [subject_id], references: [id], onDelete: Cascade)
+  class   TrackerClass?  @relation(fields: [class_id], references: [id], onDelete: SetNull)
+
+  @@unique([user_id, subject_id, topic_name])
+  @@index([user_id])
+  @@map("custom_topics")
+  @@schema("tracker")
+}
+
+model TrackerLog {
+  id          String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id     String            @db.Uuid
+  tracker_id  String            @db.Uuid
+  action_type TrackerActionType
+  old_value   String?
+  new_value   String?
+
+  created_at DateTime @default(now()) @db.Timestamptz
+
+  user    User               @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  tracker TrackerUserTracker @relation(fields: [tracker_id], references: [id], onDelete: Cascade)
+
+  @@index([user_id])
+  @@index([tracker_id])
+  @@map("tracker_logs")
+  @@schema("tracker")
+}

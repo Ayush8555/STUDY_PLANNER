@@ -1,0 +1,102 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --color-primary: var(--primary);
+  --color-primary-hover: var(--primary-hover);
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-text-dark: var(--text-dark);
+  --color-text-main: var(--text-main);
+  --color-text-muted: var(--text-muted);
+  --color-badge-bg: var(--badge-bg);
+  --color-badge-text: var(--badge-text);
+  --color-icon-blue-bg: var(--icon-blue-bg);
+  --color-icon-blue-fg: var(--icon-blue-fg);
+  --color-icon-purple-bg: var(--icon-purple-bg);
+  --color-icon-purple-fg: var(--icon-purple-fg);
+  --color-icon-pink-bg: var(--icon-pink-bg);
+  --color-icon-pink-fg: var(--icon-pink-fg);
+  --color-icon-red-bg: var(--icon-red-bg);
+  --color-icon-red-fg: var(--icon-red-fg);
+  --color-icon-orange-bg: var(--icon-orange-bg);
+  --color-icon-orange-fg: var(--icon-orange-fg);
+  --color-icon-yellow-bg: var(--icon-yellow-bg);
+  --color-icon-yellow-fg: var(--icon-yellow-fg);
+
+  --animate-float: float 6s ease-in-out infinite;
+
+  @keyframes float {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-10px); }
+  }
+}
+
+:root {
+  --primary: #5956DF;
+  --primary-hover: #4B49C8;
+  --bg: #FAFAFB;
+  --surface: #FFFFFF;
+  --text-dark: #111827;
+  --text-main: #374151;
+  --text-muted: #6B7280;
+  --badge-bg: #EEEDFF;
+  --badge-text: #5956DF;
+  --icon-blue-bg: #EBF4FF;
+  --icon-blue-fg: #3B82F6;
+  --icon-purple-bg: #F3E8FF;
+  --icon-purple-fg: #A855F7;
+  --icon-pink-bg: #FCE7F3;
+  --icon-pink-fg: #EC4899;
+  --icon-red-bg: #FEE2E2;
+  --icon-red-fg: #EF4444;
+  --icon-orange-bg: #FFEDD5;
+  --icon-orange-fg: #F97316;
+  --icon-yellow-bg: #FEF9C3;
+  --icon-yellow-fg: #EAB308;
+}
+
+.dark {
+  --primary: #5A69E6;
+  --primary-hover: #4E5CD1;
+  --bg: #030712;
+  --surface: #111827;
+  --text-dark: #F9FAFB;
+  --text-main: #D1D5DB;
+  --text-muted: #9CA3AF;
+  
+  --badge-bg: rgba(89, 86, 223, 0.15);
+  --badge-text: #818CF8;
+  --icon-blue-bg: rgba(59, 130, 246, 0.15);
+  --icon-blue-fg: #60A5FA;
+  --icon-purple-bg: rgba(168, 85, 247, 0.15);
+  --icon-purple-fg: #C084FC;
+  --icon-pink-bg: rgba(236, 72, 153, 0.15);
+  --icon-pink-fg: #F472B6;
+  --icon-red-bg: rgba(239, 68, 68, 0.15);
+  --icon-red-fg: #F87171;
+  --icon-orange-bg: rgba(249, 115, 22, 0.15);
+  --icon-orange-fg: #FB923C;
+  --icon-yellow-bg: rgba(234, 179, 8, 0.15);
+  --icon-yellow-fg: #FACC15;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text-main);
+  -webkit-font-smoothing: antialiased;
+}
+
+.container {
+  width: 100%;
+  margin: 0 auto;
+  padding: 0 2rem;
+}
+
+.text-gradient {
+  background-clip: text;
+  -webkit-background-clip: text;
+  color: transparent;
+  background-image: linear-gradient(to right, #7c3aed, var(--primary), #3b82f6);
+}
