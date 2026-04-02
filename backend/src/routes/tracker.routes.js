@@ -95,15 +95,24 @@ router.get('/chapters', async (req, res) => {
       ]
     });
 
+    const customChapterWhere = {
+      user_id: userId,
+      chapter_id: null,
+      custom_topic_name: { not: null },
+      ...(subject && subject !== 'all' ? { subject: { name: subject } } : {}),
+      ...(search ? { custom_topic_name: { contains: search, mode: 'insensitive' } } : {}),
+    };
+
+    if (classNumber) {
+      const classNums = classNumber.split(',').map(Number).filter(n => !isNaN(n));
+      if (classNums.length > 0) {
+        customChapterWhere.class = { class_number: { in: classNums } };
+      }
+    }
+
     // Also get custom chapters for this user
     const customChapters = await prisma.trackerUserTracker.findMany({
-      where: {
-        user_id: userId,
-        chapter_id: null,
-        custom_topic_name: { not: null },
-        ...(subject && subject !== 'all' ? { subject: { name: subject } } : {}),
-        ...(search ? { custom_topic_name: { contains: search, mode: 'insensitive' } } : {}),
-      },
+      where: customChapterWhere,
       include: {
         subject: { select: { id: true, name: true } },
         class: { select: { id: true, class_number: true } },

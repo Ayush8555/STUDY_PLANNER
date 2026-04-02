@@ -2,7 +2,7 @@
 
 import { useAuth } from '@/context/AuthContext';
 import { useRouter } from 'next/navigation';
-import { useEffect, useState, useCallback, useRef } from 'react';
+import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import api from '@/services/api';
 import {
@@ -286,7 +286,7 @@ function RevisionButton({ label, done, enabled, onToggle, disabled }) {
 }
 
 // ─── CLASS FILTER DROPDOWN ───────────────────────────────────────
-function ClassFilterDropdown({ selectedClasses, onToggle, allClasses }) {
+function ClassFilterDropdown({ selectedClasses, onToggle, onClear, allClasses }) {
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
 
@@ -297,7 +297,7 @@ function ClassFilterDropdown({ selectedClasses, onToggle, allClasses }) {
   }, []);
 
   const label = selectedClasses.length === 0 || selectedClasses.length === allClasses.length
-    ? '6, 7, 8...'
+    ? 'All'
     : selectedClasses.sort((a, b) => a - b).join(', ');
 
   return (
@@ -312,6 +312,18 @@ function ClassFilterDropdown({ selectedClasses, onToggle, allClasses }) {
       </button>
       {open && (
         <div className="absolute top-full left-0 mt-1 bg-white rounded-xl border border-gray-100 shadow-lg z-20 w-40 py-2">
+          <button
+            onClick={() => { onClear(); setOpen(false); }}
+            className={`w-full flex items-center gap-2 px-3 py-2 text-[12px] font-medium hover:bg-gray-50 transition-colors ${selectedClasses.length === 0 ? 'text-[#5956DF] font-bold' : 'text-gray-600'}`}
+          >
+            <div className={`w-4 h-4 rounded border flex items-center justify-center ${selectedClasses.length === 0 ? 'bg-[#5956DF] border-[#5956DF]' : 'border-gray-300'}`}>
+              {selectedClasses.length === 0 && <Check size={10} weight="bold" className="text-white" />}
+            </div>
+            All Classes
+          </button>
+          
+          <div className="h-px bg-gray-100 my-1"></div>
+
           {allClasses.map(c => (
             <button
               key={c}
@@ -335,31 +347,26 @@ export default function TrackerPage() {
   const { user, logout, loading: authLoading } = useAuth();
   const router = useRouter();
 
-  const [chapters, setChapters] = useState([]);
+  const [allChapters, setAllChapters] = useState([]);
   const [summary, setSummary] = useState({ total_chapters: 0, completed: 0, pending: 0, in_progress: 0, progress_percentage: 0, revision_health: 0 });
   const [weekly, setWeekly] = useState({ completed_this_week: 0, streak: 0 });
   const [filters, setFilters] = useState({ subjects: [], classes: [] });
   const [selectedSubject, setSelectedSubject] = useState('all');
   const [selectedClasses, setSelectedClasses] = useState([]);
+  const [selectedStatus, setSelectedStatus] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [loadingChapters, setLoadingChapters] = useState(true);
   const [updatingIds, setUpdatingIds] = useState(new Set());
   const [showModal, setShowModal] = useState(false);
-  const debounceRef = useRef(null);
 
   useEffect(() => { if (!authLoading && !user) router.push('/login'); }, [authLoading, user, router]);
 
-  // Fetch chapters
-  const fetchChapters = useCallback(async (subject, classes, search) => {
+  // Fetch ALL chapters once (no filter params — we filter client-side)
+  const fetchAllChapters = useCallback(async () => {
     try {
-      const params = new URLSearchParams();
-      if (subject && subject !== 'all') params.set('subject', subject);
-      if (classes && classes.length > 0) params.set('classNumber', classes.join(','));
-      if (search) params.set('search', search);
-
-      const { data } = await api.get(`/tracker/chapters?${params.toString()}`);
+      const { data } = await api.get('/tracker/chapters');
       if (data.success) {
-        setChapters(data.chapters);
+        setAllChapters(data.chapters);
         setFilters(data.filters);
       }
     } catch (err) {
@@ -383,31 +390,49 @@ export default function TrackerPage() {
     }
   }, []);
 
+  // Load data once on mount
   useEffect(() => {
     if (user) {
-      fetchChapters(selectedSubject, selectedClasses, searchQuery);
+      fetchAllChapters();
       fetchSummary();
     }
   }, [user]); // eslint-disable-line
 
-  // Debounced search
-  useEffect(() => {
-    if (!user) return;
-    if (debounceRef.current) clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(() => {
-      setLoadingChapters(true);
-      fetchChapters(selectedSubject, selectedClasses, searchQuery);
-    }, 300);
-    return () => clearTimeout(debounceRef.current);
-  }, [selectedSubject, selectedClasses, searchQuery]); // eslint-disable-line
+  // ⚡ CLIENT-SIDE FILTERING — instant, zero network latency
+  const chapters = useMemo(() => {
+    let result = allChapters;
+
+    // Filter by subject
+    if (selectedSubject && selectedSubject !== 'all') {
+      result = result.filter(ch => ch.subject === selectedSubject);
+    }
+
+    // Filter by class
+    if (selectedClasses.length > 0) {
+      result = result.filter(ch => selectedClasses.includes(ch.class_number));
+    }
+
+    // Filter by status
+    if (selectedStatus && selectedStatus !== 'all') {
+      result = result.filter(ch => ch.status === selectedStatus);
+    }
+
+    // Filter by search query
+    if (searchQuery.trim()) {
+      const q = searchQuery.trim().toLowerCase();
+      result = result.filter(ch => ch.chapter_name?.toLowerCase().includes(q));
+    }
+
+    return result;
+  }, [allChapters, selectedSubject, selectedClasses, selectedStatus, searchQuery]);
 
   // Update handler with optimistic UI
   const handleUpdate = async (chapter, field, value) => {
     const chapterId = chapter.id;
-    if (updatingIds.has(chapterId + field)) return; // prevent double click
+    if (updatingIds.has(chapterId)) return; // prevent parallel requests on the same chapter
 
     // Optimistic update
-    setChapters(prev => prev.map(ch => {
+    setAllChapters(prev => prev.map(ch => {
       if (ch.id !== chapterId) return ch;
       const updated = { ...ch, [field]: value };
       // Auto-set ncert when completed
@@ -441,7 +466,7 @@ export default function TrackerPage() {
       return updated;
     }));
 
-    setUpdatingIds(prev => new Set([...prev, chapterId + field]));
+    setUpdatingIds(prev => new Set([...prev, chapterId]));
 
     try {
       await api.post('/tracker/update-status', {
@@ -454,11 +479,11 @@ export default function TrackerPage() {
     } catch (err) {
       toast.error(err.response?.data?.message || 'Failed to update');
       // Revert optimistic update
-      fetchChapters(selectedSubject, selectedClasses, searchQuery);
+      fetchAllChapters();
     } finally {
       setUpdatingIds(prev => {
         const next = new Set(prev);
-        next.delete(chapterId + field);
+        next.delete(chapterId);
         return next;
       });
     }
@@ -586,7 +611,7 @@ export default function TrackerPage() {
           </div>
 
           {/* ═══ FILTERS BAR ═══ */}
-          <div className="flex flex-wrap items-center gap-3 mb-6 bg-white/70 backdrop-blur-xl border border-white/40 shadow-lg p-3 rounded-2xl hover:shadow-xl transition-all duration-300">
+          <div className="relative z-30 flex flex-wrap items-center gap-3 mb-6 bg-white/70 backdrop-blur-xl border border-white/40 shadow-lg p-3 rounded-2xl hover:shadow-xl transition-all duration-300">
             <div className="flex items-center gap-2 px-4 py-2.5 rounded-full border border-gray-200/50 bg-white/50 text-[13px] font-medium backdrop-blur-md">
               <span className="text-[#9CA3AF]">Exam</span>
               <span className="font-bold text-[#1A1A1A]">UPSC</span>
@@ -608,8 +633,21 @@ export default function TrackerPage() {
             <ClassFilterDropdown
               selectedClasses={selectedClasses}
               onToggle={handleClassToggle}
+              onClear={() => setSelectedClasses([])}
               allClasses={allClassNumbers}
             />
+
+            {/* Status Filter */}
+            <select
+              value={selectedStatus}
+              onChange={e => setSelectedStatus(e.target.value)}
+              className="px-4 py-2.5 rounded-full border border-gray-200 bg-white text-[13px] font-medium focus:outline-none focus:ring-2 focus:ring-[#5956DF]/20 cursor-pointer"
+            >
+              <option value="all">All Status</option>
+              <option value="pending">Pending</option>
+              <option value="in_progress">In Progress</option>
+              <option value="completed">Completed</option>
+            </select>
 
             {/* Search */}
             <div className="flex-1 relative min-w-[200px]">
@@ -689,15 +727,16 @@ export default function TrackerPage() {
                         <StatusDropdown
                           status={ch.status}
                           onUpdate={(val) => handleUpdate(ch, 'status', val)}
+                          disabled={updatingIds.has(ch.id)}
                         />
 
                         {/* NCERT Done */}
                         <button
                           onClick={() => ch.status !== 'pending' && handleUpdate(ch, 'ncert_read', !ch.ncert_read)}
-                          disabled={ch.status === 'pending'}
+                          disabled={ch.status === 'pending' || updatingIds.has(ch.id)}
                           className={`w-7 h-7 rounded-full flex items-center justify-center transition-all ${ch.ncert_read
                             ? 'text-[#059669]'
-                            : ch.status === 'pending'
+                            : ch.status === 'pending' || updatingIds.has(ch.id)
                               ? 'text-gray-200 cursor-not-allowed'
                               : 'text-gray-300 hover:text-gray-400 cursor-pointer'
                             }`}
@@ -712,21 +751,25 @@ export default function TrackerPage() {
                               label="R1" done={ch.revision1_done}
                               enabled={ch.status === 'completed'}
                               onToggle={(v) => handleUpdate(ch, 'revision1_done', v)}
+                              disabled={updatingIds.has(ch.id)}
                             />
                             <RevisionButton
                               label="R2" done={ch.revision2_done}
                               enabled={ch.revision1_done}
                               onToggle={(v) => handleUpdate(ch, 'revision2_done', v)}
+                              disabled={updatingIds.has(ch.id)}
                             />
                             <RevisionButton
                               label="R3" done={ch.revision3_done}
                               enabled={ch.revision2_done}
                               onToggle={(v) => handleUpdate(ch, 'revision3_done', v)}
+                              disabled={updatingIds.has(ch.id)}
                             />
                             <RevisionButton
                               label="R4" done={ch.revision4_done}
                               enabled={ch.revision3_done}
                               onToggle={(v) => handleUpdate(ch, 'revision4_done', v)}
+                              disabled={updatingIds.has(ch.id)}
                             />
                           </div>
                           <span className="text-[9px] text-gray-400">
